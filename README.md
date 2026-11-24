@@ -10,4 +10,6 @@ case in `/input/cases.json` into `/output/answers.json`.
 
 Optimisations: single-pass Markdown rendering without token objects, bulk inline
 escaping, per-build slug/date caches, word counting without match arrays, and templates
-compiled to functions.
+compiled to functions. Second pass: HTML escaping and the inline scanner's hot loops
+run on native regex scans instead of per-character walks, and the word counter's
+whitespace loop short-circuits its common cases.

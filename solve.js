@@ -7,20 +7,12 @@ const SLUG_MAX = 64;
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const RESERVED = ['posts', 'tags', 'page'];
 
+const ESC_TEST = /[&<>"']/;
+const ESC_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
 function esc(s) {
-  let i = 0;
-  const n = s.length;
-  for (; i < n; i++) {
-    const c = s.charCodeAt(i);
-    if (c === 38 || c === 60 || c === 62 || c === 34 || c === 39) break;
-  }
-  if (i === n) return s;
-  let out = s.slice(0, i);
-  for (; i < n; i++) {
-    const c = s[i];
-    out += c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '"' ? '&quot;' : c === "'" ? '&#39;' : c;
-  }
-  return out;
+  if (!ESC_TEST.test(s)) return s;
+  return s.replace(/[&<>"']/g, (c) => ESC_MAP[c]);
 }
 
 function slugRaw(text) {
@@ -277,20 +269,18 @@ function linkHref(ctx, target) {
   return target;
 }
 
+const INLINE_SPECIAL = /[\\`*[]/g;
+const ESCAPABLE_CHAR = /[&<>"']/;
+
 function inline(s, ctx) {
   let out = '';
   let i = 0;
   const n = s.length;
   while (i < n) {
-    let j = i;
-    let hasEsc = false;
-    while (j < n) {
-      const code = s.charCodeAt(j);
-      if (code === 92 || code === 96 || code === 42 || code === 91) break;
-      if (code === 38 || code === 60 || code === 62 || code === 34 || code === 39) hasEsc = true;
-      j++;
-    }
-    if (j > i) { const chunk = s.slice(i, j); out += hasEsc ? esc(chunk) : chunk; i = j; continue; }
+    INLINE_SPECIAL.lastIndex = i;
+    const hit = INLINE_SPECIAL.exec(s);
+    const j = hit === null ? n : hit.index;
+    if (j > i) { const chunk = s.slice(i, j); out += ESCAPABLE_CHAR.test(chunk) ? esc(chunk) : chunk; i = j; continue; }
     const c = s[i];
     if (c === '\\') {
       if (i + 1 < n && ESCAPABLE.has(s[i + 1])) { out += esc(s[i + 1]); i += 2; }
@@ -576,15 +566,17 @@ const dirOf = (path) => {
 };
 
 function wordsOf(text) {
+  // The reference counts runs of non-whitespace; its whitespace set is space, \t-\r
+  // and the Unicode spaces checked below (the same set JavaScript's \s matches).
   let count = 0;
   let inWord = false;
   for (let i = 0; i < text.length; i++) {
     const code = text.charCodeAt(i);
-    const ws = code === 32 || (code >= 9 && code <= 13) || (code >= 160 &&
+    if (code === 32 || (code >= 9 && code <= 13)) { inWord = false; continue; }
+    if (code >= 160 &&
       (code === 160 || code === 5760 || (code >= 8192 && code <= 8202) || code === 8232 ||
-       code === 8233 || code === 8239 || code === 8287 || code === 12288 || code === 65279));
-    if (ws) inWord = false;
-    else if (!inWord) { inWord = true; count++; }
+       code === 8233 || code === 8239 || code === 8287 || code === 12288 || code === 65279)) { inWord = false; continue; }
+    if (!inWord) { inWord = true; count++; }
   }
   return count;
 }
